@@ -11,20 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         submodules: recursive
         
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential wget
-        
-    - name: Setup PSX toolchain
-      run: |
-        wget https://github.com/psxdev/psxtoolchain/releases/latest/download/psxtoolchain.tar.gz
-        tar -xzf psxtoolchain.tar.gz
-        echo "$(pwd)/psxtoolchain/bin" >> $GITHUB_PATH
+        sudo apt-get install -y build-essential wget git make gcc
         
     - name: Build PSXFunkin
       run: |
