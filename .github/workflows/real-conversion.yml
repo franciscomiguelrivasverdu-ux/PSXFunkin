@@ -1,0 +1,49 @@
+name: REAL WAV to XA Conversion
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install FFmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+        
+    - name: Convert WAV to XA
+      run: |
+        echo "🎵 CONVIRTIENDO WAV → XA..."
+        find ./iso -name "*.wav" | while read wav_file; do
+          xa_file="${wav_file%.wav}.xa"
+          echo "Convertiendo: $wav_file -> $xa_file"
+          ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file" -y
+          echo "✅ CONVERSIÓN EXITOSA: $xa_file"
+        done
+        
+    - name: List converted files
+      run: |
+        echo "📁 ARCHIVOS XA GENERADOS:"
+        find ./iso -name "*.xa"
+        
+    - name: Create success report
+      run: |
+        echo "🎉 CONVERSIÓN COMPLETADA" > conversion-report.txt
+        echo "Archivos convertidos:" >> conversion-report.txt
+        find ./iso -name "*.xa" >> conversion-report.txt
+        echo "" >> conversion-report.txt
+        echo "✨ Fideo Kósmico + Vinci = ÉXITO" >> conversion-report.txt
+        
+    - name: Upload XA files
+      uses: actions/upload-artifact@v4
+      with:
+        name: converted-xa-files
+        path: |
+          ./iso/**/*.xa
+          conversion-report.txt
