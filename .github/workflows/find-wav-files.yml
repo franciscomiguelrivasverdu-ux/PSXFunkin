@@ -1,0 +1,40 @@
+name: FIND WAV FILES
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Search for WAV files
+      run: |
+        echo "🔍 BUSCANDO ARCHIVOS WAV EN TODO EL REPOSITORIO:"
+        find . -name "*.wav" -type f
+        echo ""
+        echo "📁 CONTENIDO DE /iso/:"
+        ls -la iso/
+        echo ""
+        echo "📁 CONTENIDO DE /iso/week1/:"
+        ls -la iso/week1/ 2>/dev/null || echo "❌ No existe week1/"
+        
+    - name: Create result file
+      run: |
+        echo "RESULTADO DE BÚSQUEDA:" > search-result.txt
+        find . -name "*.wav" -type f >> search-result.txt
+        if [ $? -eq 0 ]; then
+          echo "✅ WAV ENCONTRADOS" >> search-result.txt
+        else
+          echo "❌ NO HAY WAV" >> search-result.txt
+        fi
+        
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: wav-search-results
+        path: search-result.txt
