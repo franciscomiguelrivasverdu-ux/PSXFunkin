@@ -3,8 +3,7 @@ name: Build PSXFunkin
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -13,28 +12,21 @@ jobs:
     steps:
     - uses: actions/checkout@v4
         
-    - name: Install dependencies
+    - name: Install PSX toolchain
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git make gcc
+        sudo apt-get install -y build-essential git make wget
+        wget -O ps1dev.tar.gz https://github.com/psxdev/ps1-prefab/archive/refs/heads/main.tar.gz
+        tar -xf ps1dev.tar.gz
+        echo "$(pwd)/ps1-prefab-main/toolchain/mipsel-none-elf/bin" >> $GITHUB_PATH
         
-    - name: Build asset tools
+    - name: Build complete project
       run: |
-        make -f Makefile.tools
-        make -f Makefile.tim
-        make -f Makefile.mus
+        make
         
-    - name: Create success marker
-      run: |
-        echo "✅ SISTEMA DE BUILD LISTO" > build-success.txt
-        echo "Ahora puedes:" >> build-success.txt
-        echo "1. Subir sprites convertidos" >> build-success.txt
-        echo "2. Subir música convertida" >> build-success.txt
-        echo "3. Subir charts JSON" >> build-success.txt
-        echo "4. Compilar port completo" >> build-success.txt
-        
-    - name: Upload success artifact
+    - name: Upload PSX build
       uses: actions/upload-artifact@v4
       with:
-        name: build-system-ready
-        path: build-success.txt
+        name: psx-game
+        path: "*.bin"
+        retention-days: 30
