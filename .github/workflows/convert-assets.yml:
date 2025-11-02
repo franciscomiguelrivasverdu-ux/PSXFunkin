@@ -1,0 +1,46 @@
+name: Convert Assets to PSX Format
+
+on:
+  push:
+    paths:
+      - 'iso/**/*.wav'
+      - 'iso/**/*.png'
+      - 'iso/**/*.json'
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install audio tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg sox
+        
+    - name: Convert WAV to XA
+      run: |
+        find iso/ -name "*.wav" | while read wav_file; do
+          xa_file="${wav_file%.wav}.xa"
+          echo "🎵 Converting: $wav_file -> $xa_file"
+          ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file"
+        done
+        
+    - name: List converted files
+      run: |
+        echo "📁 Archivos convertidos:"
+        find iso/ -name "*.xa" | head -10
+        
+    - name: Create success marker
+      run: |
+        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
+        find iso/ -name "*.xa" >> conversion-success.txt
+        
+    - name: Upload converted assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: converted-assets
+        path: |
+          iso/**/*.xa
+          conversion-success.txt
