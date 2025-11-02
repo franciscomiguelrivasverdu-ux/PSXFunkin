@@ -16,21 +16,25 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential git make
+        sudo apt-get install -y build-essential git make gcc
         
-    - name: Build only assets (sin compilación C)
+    - name: Build asset tools
       run: |
-        cd tools
         make -f Makefile.tools
         make -f Makefile.tim
         make -f Makefile.mus
         
-    - name: Create dummy success file
+    - name: Create success marker
       run: |
-        echo "BUILD SYSTEM READY - Ahora puedes subir tus assets!" > build-ready.txt
+        echo "✅ SISTEMA DE BUILD LISTO" > build-success.txt
+        echo "Ahora puedes:" >> build-success.txt
+        echo "1. Subir sprites convertidos" >> build-success.txt
+        echo "2. Subir música convertida" >> build-success.txt
+        echo "3. Subir charts JSON" >> build-success.txt
+        echo "4. Compilar port completo" >> build-success.txt
         
     - name: Upload success artifact
       uses: actions/upload-artifact@v4
       with:
         name: build-system-ready
-        path: build-ready.txt
+        path: build-success.txt
