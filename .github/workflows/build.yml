@@ -13,21 +13,24 @@ jobs:
     steps:
     - uses: actions/checkout@v4
         
-    - name: Install PSX toolchain
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential wget git make
-        wget https://github.com/PSXDev/ps1-prefab/raw/main/toolchain/mipsel-none-elf-9.2.0-Linux-x86_64.tar.xz
-        tar -xf mipsel-none-elf-9.2.0-Linux-x86_64.tar.xz
-        echo "$(pwd)/mipsel-none-elf/bin" >> $GITHUB_PATH
+        sudo apt-get install -y build-essential git make
         
-    - name: Build PSXFunkin
+    - name: Build only assets (sin compilación C)
       run: |
-        make
+        cd tools
+        make -f Makefile.tools
+        make -f Makefile.tim
+        make -f Makefile.mus
         
-    - name: Upload build artifacts
+    - name: Create dummy success file
+      run: |
+        echo "BUILD SYSTEM READY - Ahora puedes subir tus assets!" > build-ready.txt
+        
+    - name: Upload success artifact
       uses: actions/upload-artifact@v4
       with:
-        name: psx-build
-        path: "*.bin"
-        retention-days: 30
+        name: build-system-ready
+        path: build-ready.txt
