@@ -1,40 +1,40 @@
-name: Convert Assets to PSX Format
+name: DEBUG Convert Assets
 
 on:
   push:
     branches: [ master ]
   workflow_dispatch:
-  pull_request:
 
 jobs:
-  convert:
+  debug:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install audio tools
+    - name: DEBUG - List ALL files
       run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg sox
+        echo "🔍 LISTANDO TODOS LOS ARCHIVOS:"
+        find iso/ -type f | head -20
+        echo ""
+        echo "🎵 ARCHIVOS WAV ESPECÍFICAMENTE:"
+        find iso/ -name "*.wav"
+        echo ""
+        echo "📁 ESTRUCTURA COMPLETA:"
+        ls -la iso/
+        ls -la iso/week1/ 2>/dev/null || echo "❌ No existe week1/"
         
-    - name: Convert WAV to XA
+    - name: DEBUG - Test conversion
       run: |
-        echo "🔍 Buscando archivos WAV..."
-        find iso/ -name "*.wav" | while read wav_file; do
-          xa_file="${wav_file%.wav}.xa"
-          echo "🎵 Convirtiendo: $wav_file -> $xa_file"
-          ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
-        done
-        
-    - name: List all audio files
-      run: |
-        echo "📁 Archivos encontrados:"
-        find iso/ -name "*.wav" -o -name "*.xa"
-        
-    - name: Create success marker
-      run: |
-        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
+        if find iso/ -name "*.wav" | grep -q .; then
+          echo "✅ WAV ENCONTRADO - Probando conversión..."
+          find iso/ -name "*.wav" | while read wav_file; do
+            echo "Convirtiendo: $wav_file"
+            ffmpeg -i "$wav_file" test_output.xa 2>&1 | head -5
+          done
+        else
+          echo "❌ NO SE ENCONTRÓ NINGÚN WAV"
+        fi        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
         echo "Archivos WAV encontrados:" >> conversion-success.txt
         find iso/ -name "*.wav" >> conversion-success.txt
         echo "" >> conversion-success.txt
