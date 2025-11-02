@@ -2,10 +2,9 @@ name: Convert Assets to PSX Format
 
 on:
   push:
-    paths:
-      - 'iso/**/*.wav'
-      - 'iso/**/*.png'
-      - 'iso/**/*.json'
+    branches: [ master ]
+  workflow_dispatch:
+  pull_request:
 
 jobs:
   convert:
@@ -21,20 +20,34 @@ jobs:
         
     - name: Convert WAV to XA
       run: |
+        echo "🔍 Buscando archivos WAV..."
         find iso/ -name "*.wav" | while read wav_file; do
           xa_file="${wav_file%.wav}.xa"
-          echo "🎵 Converting: $wav_file -> $xa_file"
-          ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file"
+          echo "🎵 Convirtiendo: $wav_file -> $xa_file"
+          ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
         done
         
-    - name: List converted files
+    - name: List all audio files
       run: |
-        echo "📁 Archivos convertidos:"
-        find iso/ -name "*.xa" | head -10
+        echo "📁 Archivos encontrados:"
+        find iso/ -name "*.wav" -o -name "*.xa"
         
     - name: Create success marker
       run: |
         echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
+        echo "Archivos WAV encontrados:" >> conversion-success.txt
+        find iso/ -name "*.wav" >> conversion-success.txt
+        echo "" >> conversion-success.txt
+        echo "Archivos XA generados:" >> conversion-success.txt
+        find iso/ -name "*.xa" >> conversion-success.txt
+        
+    - name: Upload converted assets
+      uses: actions/upload-artifact@v4
+      with:
+        name: converted-assets
+        path: |
+          iso/**/*.xa
+          conversion-success.txt        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
         find iso/ -name "*.xa" >> conversion-success.txt
         
     - name: Upload converted assets
