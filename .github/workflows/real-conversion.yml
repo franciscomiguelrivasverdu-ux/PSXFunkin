@@ -23,7 +23,7 @@ jobs:
         find ./iso -name "*.wav" | while read wav_file; do
           xa_file="${wav_file%.wav}.xa"
           echo "Convertiendo: $wav_file -> $xa_file"
-          ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file" -y
+          ffmpeg -i "$wav_file" -f wav -acodec adpcam_ima_wav "$xa_file" -y
           echo "✅ CONVERSIÓN EXITOSA: $xa_file"
         done
         
