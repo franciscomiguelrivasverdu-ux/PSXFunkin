@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
     paths:
-      - '**/*.xa'
+      - 'iso/**/*.xa'  # SOLO XA en /iso/
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     - name: Convert XA to WAV
       run: |
         echo "🎵 CONVIRTIENDO XA → WAV..."
-        find . -name "*.xa" | while read xa_file; do
+        find ./iso -name "*.xa" | while read xa_file; do
           wav_file="${xa_file%.xa}.wav"
           echo "Convirtiendo: $xa_file -> $wav_file"
           ffmpeg -i "$xa_file" "$wav_file" -y
@@ -32,10 +32,10 @@ jobs:
     - name: List converted files
       run: |
         echo "📁 ARCHIVOS WAV GENERADOS:"
-        find . -name "*.wav"
+        find ./iso -name "*.wav"
         
     - name: Upload WAV files
       uses: actions/upload-artifact@v4
       with:
         name: xa-to-wav-conversion
-        path: "**/*.wav"
+        path: ./iso/**/*.wav
