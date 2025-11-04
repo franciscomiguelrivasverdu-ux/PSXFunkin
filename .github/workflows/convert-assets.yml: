@@ -1,59 +1,41 @@
-name: DEBUG Convert Assets
+name: Convert Assets to PSX Format
 
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'iso/**/*.wav'  # SOLO WAV en /iso/
   workflow_dispatch:
 
 jobs:
-  debug:
+  convert:
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: DEBUG - List ALL files
+    - name: Install audio tools
       run: |
-        echo "🔍 LISTANDO TODOS LOS ARCHIVOS:"
-        find iso/ -type f | head -20
-        echo ""
-        echo "🎵 ARCHIVOS WAV ESPECÍFICAMENTE:"
-        find iso/ -name "*.wav"
-        echo ""
-        echo "📁 ESTRUCTURA COMPLETA:"
-        ls -la iso/
-        ls -la iso/week1/ 2>/dev/null || echo "❌ No existe week1/"
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
         
-    - name: DEBUG - Test conversion
+    - name: Convert WAV to XA
       run: |
-        if find iso/ -name "*.wav" | grep -q .; then
-          echo "✅ WAV ENCONTRADO - Probando conversión..."
-          find iso/ -name "*.wav" | while read wav_file; do
-            echo "Convirtiendo: $wav_file"
-            ffmpeg -i "$wav_file" test_output.xa 2>&1 | head -5
-          done
-        else
-          echo "❌ NO SE ENCONTRÓ NINGÚN WAV"
-        fi        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
-        echo "Archivos WAV encontrados:" >> conversion-success.txt
-        find iso/ -name "*.wav" >> conversion-success.txt
-        echo "" >> conversion-success.txt
-        echo "Archivos XA generados:" >> conversion-success.txt
-        find iso/ -name "*.xa" >> conversion-success.txt
+        echo "🎵 CONVIRTIENDO WAV → XA..."
+        find ./iso -name "*.wav" | while read wav_file; do
+          xa_file="${wav_file%.wav}.xa"
+          echo "Convertiendo: $wav_file -> $xa_file"
+          ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
+          echo "✅ CONVERSIÓN EXITOSA: $xa_file"
+        done
         
-    - name: Upload converted assets
+    - name: List converted files
+      run: |
+        echo "📁 ARCHIVOS XA GENERADOS:"
+        find ./iso -name "*.xa"
+        
+    - name: Upload XA files
       uses: actions/upload-artifact@v4
       with:
-        name: converted-assets
-        path: |
-          iso/**/*.xa
-          conversion-success.txt        echo "✅ CONVERSIÓN EXITOSA" > conversion-success.txt
-        find iso/ -name "*.xa" >> conversion-success.txt
-        
-    - name: Upload converted assets
-      uses: actions/upload-artifact@v4
-      with:
-        name: converted-assets
-        path: |
-          iso/**/*.xa
-          conversion-success.txt
+        name: wav-to-xa-conversion
+        path: ./iso/**/*.xa
