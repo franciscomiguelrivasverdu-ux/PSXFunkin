@@ -34,8 +34,18 @@ jobs:
         echo "📁 ARCHIVOS WAV GENERADOS:"
         find ./iso -name "*.wav"
         
+    - name: Create success report
+      run: |
+        echo "🎉 CONVERSIÓN COMPLETADA" > conversion-report.txt
+        echo "Archivos convertidos:" >> conversion-report.txt
+        find ./iso -name "*.wav" >> conversion-report.txt
+        echo "" >> conversion-report.txt
+        echo "✨ XA → WAV EXITOSO" >> conversion-report.txt
+        
     - name: Upload WAV files
       uses: actions/upload-artifact@v4
       with:
         name: xa-to-wav-conversion
-        path: ./iso/**/*.wav
+        path: |
+          ./iso/**/*.wav
+          conversion-report.txt
