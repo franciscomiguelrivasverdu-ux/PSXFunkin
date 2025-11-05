@@ -18,12 +18,14 @@ jobs:
     - name: Install PSX Toolchain
       run: |
         echo "🔧 INSTALANDO TOOLCHAIN PSX..."
-        # Instalar toolchain MIPS para PSX
-        wget -O psxtoolchain.tar.gz https://github.com/psxdev/psxtoolchain/releases/latest/download/psxtoolchain-linux.tar.gz
-        tar -xzf psxtoolchain.tar.gz
-        sudo cp -r psxtoolchain/* /usr/local/
-        export PATH="/usr/local/bin:$PATH"
-        echo "PATH=/usr/local/bin:$PATH" >> $GITHUB_ENV
+        # Método alternativo - construir desde fuente
+        git clone --depth 1 https://github.com/psxdev/psxtoolchain
+        cd psxtoolchain
+        chmod +x toolchain.sh
+        ./toolchain.sh
+        export PATH="$PWD/bin:$PATH"
+        echo "PATH=$PWD/bin:$PATH" >> $GITHUB_ENV
+        cd ..
         
     - name: Build asset tools
       run: |
