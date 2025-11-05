@@ -13,20 +13,25 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip
+        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip
         
-    - name: Install PSX Toolchain
+    - name: Install PSX Toolchain and PSY-Q
       run: |
-        echo "🔧 INSTALANDO TOOLCHAIN PSX..."
-        # Método directo - usar repositorios Ubuntu
+        echo "🔧 INSTALANDO TOOLCHAIN PSX COMPLETO..."
+        
+        # Instalar compilador MIPS
         sudo apt-get install -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
         
-        # Crear symlinks para compatibilidad
-        sudo ln -sf /usr/bin/mipsel-linux-gnu-gcc /usr/local/bin/mipsel-none-elf-gcc
-        sudo ln -sf /usr/bin/mipsel-linux-gnu-ld /usr/local/bin/mipsel-none-elf-ld
-        sudo ln -sf /usr/bin/mipsel-linux-gnu-objcopy /usr/local/bin/mipsel-none-elf-objcopy
+        # Descargar e instalar PSY-Q SDK
+        wget -O psyq-sdk.zip "https://github.com/grumpycoders/pcsx-redux/raw/main/tools/psyq/psyq-sdk.zip"
+        unzip -q psyq-sdk.zip -d /usr/local/psyq/
         
-        echo "✅ Toolchain instalado"
+        # Configurar variables de entorno
+        echo "PSXSDK=/usr/local/psyq" >> $GITHUB_ENV
+        echo "CPATH=/usr/local/psyq/include:$CPATH" >> $GITHUB_ENV
+        echo "LIBRARY_PATH=/usr/local/psyq/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+        
+        echo "✅ Toolchain y PSY-Q instalados"
         
     - name: Build asset tools
       run: |
@@ -39,73 +44,35 @@ jobs:
         done
         echo "✅ Herramientas compiladas"
         
-    - name: Convert PNG to PSX format
+    - name: Build the game (with PSY-Q)
       run: |
-        echo "🎨 CONVIRTIENDO PNG A FORMATO PSX..."
-        if find iso -name "*.png" | grep -q .; then
-          find iso -name "*.png" | while read png_file; do
-            echo "Optimizando: $png_file"
-            convert "$png_file" -colors 256 PNG8:"$png_file" || echo "⚠️  Error optimizando $png_file"
-          done
-        else
-          echo "ℹ️ No se encontraron archivos PNG"
-        fi
+        echo "🎮 COMPILANDO JUEGO CON PSY-Q..."
         
-    - name: Convert assets to PSX format
-      run: |
-        echo "🔄 CONVIRTIENDO ASSETS..."
+        # Configurar entorno para PSY-Q
+        export PSXSDK=/usr/local/psyq
+        export CPATH=$PSXSDK/include:$CPATH
+        export LIBRARY_PATH=$PSXSDK/lib:$LIBRARY_PATH
         
-        # Si no hay herramientas, saltar conversión
-        if ! find . -name "funkintimpak" -type f | grep -q .; then
-          echo "ℹ️ No se encontraron herramientas de conversión, saltando..."
-          exit 0
-        fi
+        # Buscar y verificar archivos de PSY-Q
+        echo "🔍 Buscando librerías PSY-Q..."
+        find /usr/local/psyq -name "libetc.h" -o -name "*.a" | head -10
         
-        # Convertir PNG → TIM
-        if find iso -name "*.png" | grep -q .; then
-          find iso -name "*.png" | while read png_file; do
-            tim_file="${png_file%.png}.tim"
-            echo "Convirtiendo: $png_file -> $tim_file"
-            ./tools/funkintimpak/funkintimpak "$png_file" "$tim_file" || echo "⚠️ Error con $png_file"
-          done
-        fi
-        
-        # Convertir WAV → XA
-        if find iso -name "*.wav" | grep -q .; then
-          find iso -name "*.wav" | while read wav_file; do
-            xa_file="${wav_file%.wav}.xa"
-            echo "Convirtiendo: $wav_file -> $xa_file"
-            ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y || echo "⚠️ Error con $wav_file"
-          done
-        fi
-        
-    - name: Build the game
-      run: |
-        echo "🎮 COMPILANDO JUEGO..."
-        
-        # Verificar compilador
-        which mipsel-linux-gnu-gcc && echo "✅ Compilador encontrado" || echo "❌ Compilador no disponible"
-        
-        # Buscar Makefile correcto
+        # Compilar
         if [ -f "Makefile.psx" ]; then
           echo "📁 Usando Makefile.psx"
-          make -f Makefile.psx || make -f Makefile.psx PSX=1
+          make -f Makefile.psx PSX=1 PSYQ=1
         elif [ -f "Makefile" ]; then
-          echo "📁 Usando Makefile"
-          make
+          echo "📁 Usando Makefile" 
+          make PSX=1 PSYQ=1
         else
           echo "❌ No se encontró Makefile"
-          find . -name "Makefile*" -type f
           exit 1
         fi
-        echo "✅ Compilación completada"
         
     - name: List generated files
       run: |
         echo "📁 ARCHIVOS GENERADOS:"
         find . -maxdepth 2 -name "*.bin" -o -name "*.cue" -o -name "*.exe" -o -name "*.elf" | head -20
-        echo "---"
-        ls -la *.bin *.cue 2>/dev/null || echo "No se generaron .bin/.cue"
         
     - name: Upload PSX Game
       if: success()
