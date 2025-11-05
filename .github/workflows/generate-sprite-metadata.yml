@@ -24,25 +24,14 @@ jobs:
         echo "📝 GENERANDO ARCHIVOS .TXT AUTOMÁTICAMENTE..."
         find iso/chart -name "*.png" | while read png_file; do
           txt_file="${png_file}.txt"
-          
-          # Obtener dimensiones de la imagen
           dimensions=$(identify -format "%w %h" "$png_file")
           width=$(echo $dimensions | cut -d' ' -f1)
           height=$(echo $dimensions | cut -d' ' -f2)
-          
-          # Calcular frames (asumimos 2 frames horizontales)
           frame_width=$((width / 2))
           num_frames=2
-          
-          # Generar metadata
           echo "$frame_width 0 0 $height $num_frames" > "$txt_file"
           echo "✅ Generado: $txt_file → $frame_width 0 0 $height $num_frames"
         done
-        
-    - name: List generated files
-      run: |
-        echo "📁 ARCHIVOS .TXT GENERADOS:"
-        find iso/chart -name "*.png.txt"
         
     - name: Upload metadata
       uses: actions/upload-artifact@v4
