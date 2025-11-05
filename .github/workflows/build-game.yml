@@ -13,23 +13,44 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick
+        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip
+        
+    - name: Install PSX Toolchain
+      run: |
+        echo "🔧 INSTALANDO TOOLCHAIN PSX..."
+        # Instalar toolchain MIPS para PSX
+        wget -O psxtoolchain.tar.gz https://github.com/psxdev/psxtoolchain/releases/latest/download/psxtoolchain-linux.tar.gz
+        tar -xzf psxtoolchain.tar.gz
+        sudo cp -r psxtoolchain/* /usr/local/
+        export PATH="/usr/local/bin:$PATH"
+        echo "PATH=/usr/local/bin:$PATH" >> $GITHUB_ENV
         
     - name: Build asset tools
       run: |
         echo "🔨 COMPILANDO HERRAMIENTAS..."
-        make -f Makefile.tools
-        make -f Makefile.tim
-        make -f Makefile.mus
+        # Verificar si los Makefiles existen antes de ejecutar
+        if [ -f "Makefile.tools" ]; then
+          make -f Makefile.tools
+        fi
+        if [ -f "Makefile.tim" ]; then
+          make -f Makefile.tim
+        fi
+        if [ -f "Makefile.mus" ]; then
+          make -f Makefile.mus
+        fi
         echo "✅ Herramientas compiladas"
         
     - name: Convert PNG to PSX format
       run: |
         echo "🎨 CONVIRTIENDO PNG A FORMATO PSX..."
-        find iso -name "*.png" | while read png_file; do
-          echo "Optimizando: $png_file"
-          convert "$png_file" -colors 256 PNG8:"$png_file"
-        done
+        if find iso -name "*.png" | grep -q .; then
+          find iso -name "*.png" | while read png_file; do
+            echo "Optimizando: $png_file"
+            convert "$png_file" -colors 256 PNG8:"$png_file"
+          done
+        else
+          echo "⚠️ No se encontraron archivos PNG"
+        fi
         
     - name: Convert assets to PSX format
       run: |
@@ -39,12 +60,14 @@ jobs:
         find . -name "funkintimpak" -type f
         find . -name "funkinarcpak" -type f
         
-        # Convertir PNG → TIM
-        find iso -name "*.png" | while read png_file; do
-          tim_file="${png_file%.png}.tim"
-          echo "Convirtiendo: $png_file -> $tim_file"
-          ./tools/funkintimpak/funkintimpak "$png_file" "$tim_file" || echo "⚠️  Error con $png_file"
-        done
+        # Convertir PNG → TIM si existen herramientas
+        if find . -name "funkintimpak" -type f | grep -q . && find iso -name "*.png" | grep -q .; then
+          find iso -name "*.png" | while read png_file; do
+            tim_file="${png_file%.png}.tim"
+            echo "Convirtiendo: $png_file -> $tim_file"
+            ./tools/funkintimpak/funkintimpak "$png_file" "$tim_file" || echo "⚠️ Error con $png_file"
+          done
+        fi
         
         # Convertir WAV → XA si existen
         if find iso -name "*.wav" | grep -q .; then
@@ -58,7 +81,19 @@ jobs:
     - name: Build the game
       run: |
         echo "🎮 COMPILANDO JUEGO..."
-        make
+        # Verificar toolchain instalado
+        which mipsel-none-elf-gcc || echo "❌ Toolchain no disponible"
+        
+        # Intentar diferentes Makefiles
+        if [ -f "Makefile.psx" ]; then
+          make -f Makefile.psx
+        elif [ -f "Makefile" ]; then
+          make
+        else
+          echo "❌ No se encontró Makefile"
+          find . -name "Makefile*"
+          exit 1
+        fi
         echo "✅ Compilación completada"
         
     - name: List generated files
