@@ -1,0 +1,57 @@
+name: Build PSX Game
+
+on:
+  workflow_dispatch:  # SOLO manual, para control total
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential make gcc git wget
+        
+    - name: Build asset tools
+      run: |
+        echo "🔨 COMPILANDO HERRAMIENTAS..."
+        cd tools
+        make -f Makefile.tools
+        make -f Makefile.tim
+        make -f Makefile.mus
+        echo "✅ Herramientas compiladas"
+        
+    - name: Convert assets to PSX format
+      run: |
+        echo "🔄 CONVIRTIENDO ASSETS..."
+        # Convertir PNG → TIM
+        find iso/chart -name "*.png" | while read png_file; do
+          tim_file="${png_file%.png}.tim"
+          echo "Converting: $png_file -> $tim_file"
+          ./tools/funkintimpak "$png_file" "$tim_file"
+        done
+        
+        # Convertir WAV → XA (si hay WAV)
+        find iso -name "*.wav" | while read wav_file; do
+          xa_file="${wav_file%.wav}.xa"
+          echo "Converting: $wav_file -> $xa_file"
+          ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
+        done
+        
+    - name: Build the game
+      run: |
+        echo "🎮 COMPILANDO JUEGO..."
+        make
+        echo "✅ Compilación completada"
+        
+    - name: Upload PSX Game
+      uses: actions/upload-artifact@v4
+      with:
+        name: psx-game-build
+        path: |
+          *.bin
+          *.cue
+        retention-days: 30
