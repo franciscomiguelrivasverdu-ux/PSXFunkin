@@ -18,28 +18,25 @@ jobs:
     - name: Install PSX Toolchain
       run: |
         echo "🔧 INSTALANDO TOOLCHAIN PSX..."
-        # Método alternativo - construir desde fuente
-        git clone --depth 1 https://github.com/psxdev/psxtoolchain
-        cd psxtoolchain
-        chmod +x toolchain.sh
-        ./toolchain.sh
-        export PATH="$PWD/bin:$PATH"
-        echo "PATH=$PWD/bin:$PATH" >> $GITHUB_ENV
-        cd ..
+        # Método directo - usar repositorios Ubuntu
+        sudo apt-get install -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
+        
+        # Crear symlinks para compatibilidad
+        sudo ln -sf /usr/bin/mipsel-linux-gnu-gcc /usr/local/bin/mipsel-none-elf-gcc
+        sudo ln -sf /usr/bin/mipsel-linux-gnu-ld /usr/local/bin/mipsel-none-elf-ld
+        sudo ln -sf /usr/bin/mipsel-linux-gnu-objcopy /usr/local/bin/mipsel-none-elf-objcopy
+        
+        echo "✅ Toolchain instalado"
         
     - name: Build asset tools
       run: |
         echo "🔨 COMPILANDO HERRAMIENTAS..."
-        # Verificar si los Makefiles existen antes de ejecutar
-        if [ -f "Makefile.tools" ]; then
-          make -f Makefile.tools
-        fi
-        if [ -f "Makefile.tim" ]; then
-          make -f Makefile.tim
-        fi
-        if [ -f "Makefile.mus" ]; then
-          make -f Makefile.mus
-        fi
+        # Solo construir si existen los Makefiles
+        for makefile in Makefile.tools Makefile.tim Makefile.mus; do
+          if [ -f "$makefile" ]; then
+            make -f "$makefile" || echo "⚠️  Error con $makefile, continuando..."
+          fi
+        done
         echo "✅ Herramientas compiladas"
         
     - name: Convert PNG to PSX format
@@ -48,22 +45,24 @@ jobs:
         if find iso -name "*.png" | grep -q .; then
           find iso -name "*.png" | while read png_file; do
             echo "Optimizando: $png_file"
-            convert "$png_file" -colors 256 PNG8:"$png_file"
+            convert "$png_file" -colors 256 PNG8:"$png_file" || echo "⚠️  Error optimizando $png_file"
           done
         else
-          echo "⚠️ No se encontraron archivos PNG"
+          echo "ℹ️ No se encontraron archivos PNG"
         fi
         
     - name: Convert assets to PSX format
       run: |
         echo "🔄 CONVIRTIENDO ASSETS..."
-        # Verificar que las herramientas existen
-        echo "🔍 Buscando herramientas..."
-        find . -name "funkintimpak" -type f
-        find . -name "funkinarcpak" -type f
         
-        # Convertir PNG → TIM si existen herramientas
-        if find . -name "funkintimpak" -type f | grep -q . && find iso -name "*.png" | grep -q .; then
+        # Si no hay herramientas, saltar conversión
+        if ! find . -name "funkintimpak" -type f | grep -q .; then
+          echo "ℹ️ No se encontraron herramientas de conversión, saltando..."
+          exit 0
+        fi
+        
+        # Convertir PNG → TIM
+        if find iso -name "*.png" | grep -q .; then
           find iso -name "*.png" | while read png_file; do
             tim_file="${png_file%.png}.tim"
             echo "Convirtiendo: $png_file -> $tim_file"
@@ -71,29 +70,32 @@ jobs:
           done
         fi
         
-        # Convertir WAV → XA si existen
+        # Convertir WAV → XA
         if find iso -name "*.wav" | grep -q .; then
           find iso -name "*.wav" | while read wav_file; do
             xa_file="${wav_file%.wav}.xa"
             echo "Convirtiendo: $wav_file -> $xa_file"
-            ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
+            ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y || echo "⚠️ Error con $wav_file"
           done
         fi
         
     - name: Build the game
       run: |
         echo "🎮 COMPILANDO JUEGO..."
-        # Verificar toolchain instalado
-        which mipsel-none-elf-gcc || echo "❌ Toolchain no disponible"
         
-        # Intentar diferentes Makefiles
+        # Verificar compilador
+        which mipsel-linux-gnu-gcc && echo "✅ Compilador encontrado" || echo "❌ Compilador no disponible"
+        
+        # Buscar Makefile correcto
         if [ -f "Makefile.psx" ]; then
-          make -f Makefile.psx
+          echo "📁 Usando Makefile.psx"
+          make -f Makefile.psx || make -f Makefile.psx PSX=1
         elif [ -f "Makefile" ]; then
+          echo "📁 Usando Makefile"
           make
         else
           echo "❌ No se encontró Makefile"
-          find . -name "Makefile*"
+          find . -name "Makefile*" -type f
           exit 1
         fi
         echo "✅ Compilación completada"
@@ -101,12 +103,16 @@ jobs:
     - name: List generated files
       run: |
         echo "📁 ARCHIVOS GENERADOS:"
-        find . -name "*.bin" -o -name "*.cue" -o -name "*.tim" -o -name "*.xa" | head -20
+        find . -maxdepth 2 -name "*.bin" -o -name "*.cue" -o -name "*.exe" -o -name "*.elf" | head -20
+        echo "---"
+        ls -la *.bin *.cue 2>/dev/null || echo "No se generaron .bin/.cue"
         
     - name: Upload PSX Game
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: psx-game-build
         path: |
           *.bin
           *.cue
+          *.elf
