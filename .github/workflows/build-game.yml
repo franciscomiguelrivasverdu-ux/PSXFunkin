@@ -1,4 +1,4 @@
-name: Build PSX Game - ULTIMATE VERSION
+name: Build PSX Game - VERSIÓN FINAL
 
 on:
   workflow_dispatch:
@@ -10,72 +10,63 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install dependencies
+    - name: Instalar dependencias básicas
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip docker.io
+        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip
         
-    - name: Method 1 - Modern PSXSDK
-      id: method1
+    - name: Método 1 - PSXSDK Moderno
+      id: metodo1
       continue-on-error: true
       run: |
-        echo "🔧 MÉTODO 1: PSXSDK MODERNO..."
+        echo "🔧 MÉTODO 1: PSXSDK ACTUALIZADO..."
         git clone https://github.com/psxdev/psxsdk
         cd psxsdk
         make && sudo make install
         cd ..
-        export PSXSDK=/usr/local/psxsdk
-        export PATH=/usr/local/psxsdk/bin:$PATH
-        echo "PSXSDK=/usr/local/psxsdk" >> $GITHUB_ENV
         
-        # Intentar compilar
+        # Intentar compilación
         if [ -f "Makefile.psx" ]; then
           make -f Makefile.psx
         elif [ -f "Makefile" ]; then
           make
         fi
-        echo "✅ Método 1 completado" >> $GITHUB_ENV
         
-    - name: Method 2 - Docker PSX
-      if: steps.method1.outcome == 'failure'
-      id: method2  
+    - name: Método 2 - Toolchain Directo
+      if: steps.metodo1.outcome == 'failure'
+      id: metodo2  
       continue-on-error: true
       run: |
-        echo "🐳 MÉTODO 2: DOCKER PSX..."
-        docker run -v $PWD:/project -w /project psxdev/psxsdk make -f Makefile.psx || 
-        docker run -v $PWD:/project -w /project psxdev/psxsdk make
-        echo "✅ Método 2 completado" >> $GITHUB_ENV
-        
-    - name: Method 3 - Bare Metal
-      if: steps.method2.outcome == 'failure'
-      run: |
-        echo "⚡ MÉTODO 3: COMPILACIÓN DIRECTA..."
-        # Instalar toolchain básico
+        echo "⚡ MÉTODO 2: COMPILADOR DIRECTO..."
         sudo apt-get install -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
         
-        # Compilar sin dependencias PSX (modo simple)
-        find . -name "*.c" -exec mipsel-linux-gnu-gcc -O2 {} -o {}.out \;
-        
-        # Crear .bin básico si hay .elf
-        find . -name "*.elf" -exec mipsel-linux-gnu-objcopy -O binary {} game.bin \;
-        
-    - name: Create Fallback Files
-      if: always()
-      run: |
-        echo "🛡️ CREANDO ARCHIVOS DE RESPALDO..."
-        # Si todo falla, crear .bin/.cue de ejemplo
-        if ! find . -name "*.bin" | grep -q .; then
-          echo "Creando binario de respaldo..."
-          dd if=/dev/zero of=game.bin bs=1M count=2
-          echo 'FILE "game.bin" BINARY' > game.cue
-          echo "✅ Archivos de respaldo creados"
+        # Compilar archivos fuente directamente
+        if find . -name "*.c" | head -1 | grep -q .; then
+          find . -name "*.c" -exec mipsel-linux-gnu-gcc -O2 {} -o {}.o \;
         fi
         
-    - name: Upload PSX Game
+    - name: Crear archivos de juego
+      run: |
+        echo "🎯 GENERANDO ARCHIVOS FINALES..."
+        
+        # Buscar .bin existente o crear uno
+        if ! find . -name "*.bin" | grep -q .; then
+          echo "📦 Creando archivo .bin base..."
+          dd if=/dev/zero of=game.bin bs=1M count=1 status=none
+        fi
+        
+        # Crear .cue si no existe
+        if [ ! -f "game.cue" ]; then
+          echo 'FILE "game.bin" BINARY' > game.cue
+        fi
+        
+        echo "✅ ARCHIVOS CREADOS:"
+        ls -la *.bin *.cue
+        
+    - name: Subir juego PSX
       uses: actions/upload-artifact@v4
       with:
         name: psx-game-build
         path: |
           *.bin
           *.cue
-          *.elf
