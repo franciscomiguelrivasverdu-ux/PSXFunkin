@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master ]
     paths:
-      - 'iso/**/*.xa'  # SOLO XA en /iso/
+      - 'iso/**/*.xa'
   workflow_dispatch:
 
 jobs:
@@ -29,23 +29,8 @@ jobs:
           echo "✅ CONVERSIÓN EXITOSA: $wav_file"
         done
         
-    - name: List converted files
-      run: |
-        echo "📁 ARCHIVOS WAV GENERADOS:"
-        find ./iso -name "*.wav"
-        
-    - name: Create success report
-      run: |
-        echo "🎉 CONVERSIÓN COMPLETADA" > conversion-report.txt
-        echo "Archivos convertidos:" >> conversion-report.txt
-        find ./iso -name "*.wav" >> conversion-report.txt
-        echo "" >> conversion-report.txt
-        echo "✨ XA → WAV EXITOSO" >> conversion-report.txt
-        
     - name: Upload WAV files
       uses: actions/upload-artifact@v4
       with:
         name: xa-to-wav-conversion
-        path: |
-          ./iso/**/*.wav
-          conversion-report.txt
+        path: ./iso/**/*.wav
