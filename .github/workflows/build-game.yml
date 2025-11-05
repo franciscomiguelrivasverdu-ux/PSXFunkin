@@ -23,21 +23,48 @@ jobs:
         make -f Makefile.mus
         echo "✅ Herramientas compiladas"
         
+    - name: Convert PNG to PSX format
+      run: |
+        echo "🎨 CONVIRTIENDO PNG A FORMATO PSX..."
+        find iso -name "*.png" | while read png_file; do
+          echo "Optimizando: $png_file"
+          convert "$png_file" -colors 256 PNG8:"$png_file"
+        done
+        
     - name: Convert assets to PSX format
       run: |
         echo "🔄 CONVIRTIENDO ASSETS..."
+        # Verificar que las herramientas existen
+        echo "🔍 Buscando herramientas..."
+        find . -name "funkintimpak" -type f
+        find . -name "funkinarcpak" -type f
+        
         # Convertir PNG → TIM
         find iso -name "*.png" | while read png_file; do
           tim_file="${png_file%.png}.tim"
           echo "Convirtiendo: $png_file -> $tim_file"
-          ./funkintimpak "$png_file" "$tim_file"
+          ./tools/funkintimpak/funkintimpak "$png_file" "$tim_file" || echo "⚠️  Error con $png_file"
         done
+        
+        # Convertir WAV → XA si existen
+        if find iso -name "*.wav" | grep -q .; then
+          find iso -name "*.wav" | while read wav_file; do
+            xa_file="${wav_file%.wav}.xa"
+            echo "Convirtiendo: $wav_file -> $xa_file"
+            ffmpeg -i "$wav_file" -f wav -acodec adpcm_ima_wav "$xa_file" -y
+          done
+        fi
         
     - name: Build the game
       run: |
         echo "🎮 COMPILANDO JUEGO..."
         make
         echo "✅ Compilación completada"
+        
+    - name: List generated files
+      run: |
+        echo "📁 ARCHIVOS GENERADOS:"
+        find . -name "*.bin" -o -name "*.cue" -o -name "*.tim" -o -name "*.xa" | head -20
         
     - name: Upload PSX Game
       uses: actions/upload-artifact@v4
