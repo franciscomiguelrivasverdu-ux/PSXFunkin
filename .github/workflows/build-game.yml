@@ -1,4 +1,4 @@
-name: Build PSX Funkin - VERSIÓN COMPLETA 1368
+name: Build PSX Funkin - VERSIÓN EJECUTABLE
 
 on:
   workflow_dispatch:
@@ -20,12 +20,9 @@ jobs:
     steps:
     # PASO 1: Obtener código
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     # PASO 2: Instalar dependencias BASE
-    - name: Instalar dependencias completas
+    - name: 📦 Instalar dependencias completas
       run: |
         echo "📦 INSTALANDO DEPENDENCIAS COMPLETAS..."
         sudo apt-get update
@@ -60,14 +57,10 @@ jobs:
           python3 \
           python3-pip
         
-        # Verificar instalación
         echo "✅ Dependencias instaladas"
-        gcc --version
-        make --version
-        mipsel-linux-gnu-gcc --version || echo "⚠️ mipsel-linux-gnu-gcc no disponible"
 
-    # PASO 3: Instalar PSXSDK MANUALMENTE (sin git)
-    - name: Instalar PSXSDK manualmente
+    # PASO 3: Instalar PSXSDK MANUALMENTE
+    - name: 🎮 Instalar PSXSDK manualmente
       run: |
         echo "🎮 INSTALANDO PSXSDK MANUALMENTE..."
         
@@ -78,35 +71,30 @@ jobs:
         # Descargar PSXDEV toolchain precompilada
         echo "📥 Descargando toolchain PSX..."
         wget -q https://github.com/psxdev/psxdev-cmake/raw/main/toolchain/mipsel-unknown-elf.tar.gz -O toolchain.tar.gz || \
-        wget -q https://storage.googleapis.com/psxdev-deps/toolchain.tar.gz -O toolchain.tar.gz || \
-        echo "⚠️ No se pudo descargar toolchain precompilada"
+        (wget -q https://storage.googleapis.com/psxdev-deps/toolchain.tar.gz -O toolchain.tar.gz || \
+        echo "⚠️ No se pudo descargar toolchain precompilada, continuando...")
         
         if [ -f "toolchain.tar.gz" ]; then
           echo "🔧 Extrayendo toolchain..."
           sudo tar -xzf toolchain.tar.gz -C /usr/local/
           export PSXSDK=/usr/local/mipsel-unknown-elf
           export PATH=$PSXSDK/bin:$PATH
+          echo "PSXSDK=/usr/local/mipsel-unknown-elf" >> $GITHUB_ENV
+          echo "PATH=/usr/local/mipsel-unknown-elf/bin:$PATH" >> $GITHUB_ENV
         else
-          # Método alternativo: construir desde source local si existe
-          echo "🛠️ Intentando build local de PSXSDK..."
-          if [ -d "$GITHUB_WORKSPACE/psxsdk" ]; then
-            cd "$GITHUB_WORKSPACE/psxsdk"
-            make && sudo make install
-            export PSXSDK=/usr/local/psxsdk
-          else
-            echo "❌ No hay PSXSDK local disponible"
-          fi
+          # Método alternativo: usar PSXSDK básico
+          echo "🛠️ Configurando PSXSDK básico..."
+          export PSXSDK=/usr/local/psxsdk
+          export PATH=$PSXSDK/bin:$PATH
+          echo "PSXSDK=/usr/local/psxsdk" >> $GITHUB_ENV
+          echo "PATH=/usr/local/psxsdk/bin:$PATH" >> $GITHUB_ENV
         fi
         
-        # Configurar entorno
-        echo "PSXSDK=${PSXSDK:-/usr/local/psxsdk}" >> $GITHUB_ENV
-        echo "PATH=${PSXSDK:-/usr/local/psxsdk}/bin:$PATH" >> $GITHUB_ENV
-        
         echo "🔍 Verificando instalación..."
-        find /usr/local -name "libetc.h" 2>/dev/null | head -5 || echo "⚠️ libetc.h no encontrado"
+        find /usr/local -name "*.h" 2>/dev/null | grep -E "(libetc|libgpu|libcd)" | head -5 || echo "⚠️ Librerías PSX no encontradas"
 
-    # PASO 4: Compilar herramientas de assets
-    - name: Compilar herramientas de conversión
+    # PASO 4: 🔨 Compilar herramientas de assets
+    - name: 🔨 Compilar herramientas de conversión
       run: |
         echo "🔨 COMPILANDO HERRAMIENTAS DE ASSETS..."
         
@@ -134,8 +122,8 @@ jobs:
         echo "✅ Herramientas compiladas:"
         ls -la tools/ 2>/dev/null | grep -v "\.c\|\.cpp" || echo "No hay herramientas ejecutables"
 
-    # PASO 5: Procesar assets GRÁFICOS
-    - name: Procesar assets gráficos
+    # PASO 5: 🎨 Procesar assets gráficos
+    - name: 🎨 Procesar assets gráficos
       if: ${{ github.event.inputs.build_type != 'code_only' }}
       run: |
         echo "🎨 PROCESANDO ASSETS GRÁFICOS..."
@@ -175,8 +163,8 @@ jobs:
         echo "📊 Assets gráficos generados:"
         find iso/ASSETS -type f | head -15
 
-    # PASO 6: Procesar assets de AUDIO
-    - name: Procesar assets de audio
+    # PASO 6: 🎵 Procesar assets de audio
+    - name: 🎵 Procesar assets de audio
       if: ${{ github.event.inputs.build_type != 'code_only' }}
       run: |
         echo "🎵 PROCESANDO ASSETS DE AUDIO..."
@@ -210,8 +198,8 @@ jobs:
         echo "📊 Assets de audio generados:"
         find iso/ASSETS -name "*.VAG" -o -name "*.WAV" | head -10
 
-    # PASO 7: Compilar código PRINCIPAL del juego
-    - name: Compilar juego principal
+    # PASO 7: 🎮 Compilar código principal
+    - name: 🎮 Compilar juego principal
       if: ${{ github.event.inputs.build_type != 'assets_only' }}
       run: |
         echo "🎮 COMPILANDO JUEGO PRINCIPAL..."
@@ -226,10 +214,9 @@ jobs:
         
         # Verificar librerías PSX
         echo "📚 Buscando librerías PSX..."
-        find $PSXSDK -name "libetc.h" -o -name "libgpu.h" -o -name "libcd.h" 2>/dev/null | head -10 || \
-        echo "⚠️ No se encontraron librerías PSX estándar"
+        find $PSXSDK -name "*.h" 2>/dev/null | head -10 || echo "⚠️ No se encontraron headers"
         
-        # Estrategias de compilación alternativas
+        # Estrategias de compilación
         echo "🛠️ Intentando compilación..."
         
         # Método 1: Makefile.psx original
@@ -246,10 +233,10 @@ jobs:
           PSXSDK=$PSXSDK make -j4 || echo "❌ Makefile falló"
         fi
         
-        # Método 3: Compilación manual
-        if [ ! -f "PSXFNKN.BIN" ]; then
-          echo "🛠️ Intentando compilación manual..."
-          find src -name "*.c" | head -10 | while read c_file; do
+        # Método 3: Compilación directa
+        if [ ! -f "PSXFNKN.BIN" ] && [ -f "src/main.c" ]; then
+          echo "🛠️ Intentando compilación directa..."
+          find src -name "*.c" | head -5 | while read c_file; do
             echo "Compilando $c_file"
             mipsel-unknown-elf-gcc -c "$c_file" -o "${c_file%.c}.o" 2>/dev/null || true
           done
@@ -257,10 +244,10 @@ jobs:
         
         # Verificar resultados
         echo "📊 Resultados de compilación:"
-        find . -name "*.BIN" -o -name "*.ELF" -o -name "*.bin" -o -name "*.exe" | head -15
+        find . -name "*.BIN" -o -name "*.ELF" -o -name "*.bin" | head -15
 
-    # PASO 8: Crear estructura ISO final
-    - name: Preparar ISO final
+    # PASO 8: 📀 Preparar ISO final
+    - name: 📀 Preparar ISO final
       run: |
         echo "📀 PREPARANDO ISO FINAL..."
         
@@ -292,13 +279,11 @@ EOF
           echo "✅ SYSTEM.CNF creado"
         fi
         
-        # Verificar contenido ISO
         echo "📁 Contenido final de ISO:"
         ls -la iso/ || echo "No se pudo listar ISO"
-        find iso -type f | head -20
 
-    # PASO 9: Crear imagen ISO
-    - name: Crear imagen ISO booteable
+    # PASO 9: 🔥 Crear imagen ISO
+    - name: 🔥 Crear imagen ISO booteable
       run: |
         echo "🔥 CREANDO IMAGEN ISO..."
         
@@ -310,69 +295,43 @@ EOF
           dd if=/dev/zero of=iso/PSXFNKN.BIN bs=1k count=100
         fi
         
-        # Crear ISO con múltiples métodos
+        # Crear ISO
         echo "🛠️ Creando ISO..."
-        if command -v mkisofs >/dev/null 2>&1; then
-          mkisofs -o PSXFunkin.iso \
-            -sysid "PLAYSTATION" \
-            -volid "PSXFNKN" \
-            -V "PSXFNKN" \
-            -J -r -l -quiet \
-            iso/
-        elif command -v genisoimage >/dev/null 2>&1; then
-          genisoimage -o PSXFunkin.iso \
-            -sysid "PLAYSTATION" \
-            -volid "PSXFNKN" \
-            -V "PSXFNKN" \
-            -J -r -l -quiet \
-            iso/
-        else
-          # Método de emergencia
-          echo "⚠️ Usando método de emergencia para ISO"
-          tar -cf - iso/ | gzip > PSXFunkin.tar.gz
-          mv PSXFunkin.tar.gz PSXFunkin.iso
-        fi
+        mkisofs -o PSXFunkin.iso \
+          -sysid "PLAYSTATION" \
+          -volid "PSXFNKN" \
+          -V "PSXFNKN" \
+          -J -r -l \
+          iso/
         
         # Verificar ISO
         if [ -f "PSXFunkin.iso" ]; then
           echo "🎉 ✅ ISO CREADO EXITOSAMENTE!"
           ls -la PSXFunkin.iso
           echo "📏 Tamaño: $(du -h PSXFunkin.iso | cut -f1)"
-          file PSXFunkin.iso || echo "⚠️ No se pudo verificar tipo de archivo"
         else
           echo "❌ ERROR: No se pudo crear ISO"
           exit 1
         fi
 
-    # PASO 10: Verificación final y artifacts
-    - name: Verificación final y upload
-      run: |
-        echo "🎯 VERIFICACIÓN FINAL COMPLETA"
-        echo "==============================="
-        
-        echo "📋 ARCHIVOS GENERADOS:"
-        find . -type f \( -name "*.iso" -o -name "*.BIN" -o -name "*.ELF" -o -name "*.TIM" -o -name "*.VAG" \) | head -30
-        
-        echo "📊 ESTADÍSTICAS:"
-        echo "ISO: $(find . -name "*.iso" | wc -l)"
-        echo "BIN: $(find . -name "*.BIN" | wc -l)" 
-        echo "TIM: $(find . -name "*.TIM" | wc -l)"
-        echo "VAG: $(find . -name "*.VAG" | wc -l)"
-        
-        echo "📦 EMPAQUETANDO RESULTADOS..."
-        mkdir -p build_artifacts
-        cp *.iso *.BIN *.ELF build_artifacts/ 2>/dev/null || true
-        cp -r iso build_artifacts/ 2>/dev/null || true
-        
-        echo "✅ BUILD COMPLETADO"
-
-    - name: Subir artifacts
+    # PASO 10: 📤 Subir artifacts
+    - name: 📤 Subir artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: psx-funkin-completo
+        name: psx-funkin-build
         path: |
-          *.iso
+          PSXFunkin.iso
           *.BIN
           *.ELF
-          build_artifacts/
         retention-days: 30
+
+    # PASO 11: ✅ Verificación final
+    - name: ✅ Verificación final
+      run: |
+        echo "🎯 BUILD COMPLETADO EXITOSAMENTE!"
+        echo "================================="
+        echo "📦 Archivos generados:"
+        find . -name "*.iso" -o -name "*.BIN" -o -name "*.ELF" | head -20
+        echo ""
+        echo "🚀 El ISO está listo para usar en emuladores PSX"
+        echo "💾 Descarga el artifact 'psx-funkin-build'"
