@@ -1,7 +1,12 @@
-name: Build PSX Game - CON ASSETS
+name: Build PSX Funkin - VERSIÓN FUNCIONAL
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_assets:
+        description: 'Saltar conversión de assets'
+        required: false
+        default: 'false'
 
 jobs:
   build:
@@ -10,114 +15,180 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Instalar dependencias completas
+    - name: Instalar dependencias PSX
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
+        sudo apt-get install -y \
+          build-essential \
+          make \
+          gcc \
+          gcc-mipsel-linux-gnu \
+          binutils-mipsel-linux-gnu \
+          mkisofs \
+          imagemagick \
+          ffmpeg
         
-    - name: Compilar herramientas de assets
+    - name: Analizar estructura del proyecto
       run: |
-        echo "🔨 COMPILANDO HERRAMIENTAS DE CONVERSIÓN..."
+        echo "📁 ESTRUCTURA DEL PROYECTO:"
+        find . -type f -name "*.c" -o -name "*.h" -o -name "Makefile*" | head -20
+        echo ""
+        echo "🎨 ASSETS EXISTENTES:"
+        find iso -type f 2>/dev/null | head -20 || echo "No hay assets en iso/"
+        echo ""
+        echo "🔧 HERRAMIENTAS:"
+        find tools -type f 2>/dev/null | head -20 || echo "No hay herramientas"
         
-        # Buscar y compilar herramientas de assets
-        if [ -f "Makefile.tools" ]; then
-          make -f Makefile.tools
-        fi
-        
-        if [ -f "tools/Makefile" ]; then
-          make -C tools
-        fi
-        
-        # Verificar herramientas compiladas
-        echo "🔍 Buscando herramientas..."
-        find tools -type f -executable
-        find . -name "funkintimpak" -o -name "png2tim" -o -name "wav2xa"
-        
-    - name: Convertir PNG a TIM
+    - name: Compilar herramientas CRÍTICAS
       run: |
-        echo "🎨 CONVIRTIENDO SPRITES PNG → TIM..."
+        echo "🔨 COMPILANDO HERRAMIENTAS ESENCIALES..."
         
-        # Buscar PNG en estructura del juego
-        if find iso -name "*.png" | grep -q .; then
-          find iso -name "*.png" | while read png_file; do
-            tim_file="${png_file%.png}.tim"
-            echo "Convirtiendo: $png_file"
-            
-            # Intentar diferentes herramientas
-            if [ -f "tools/funkintimpak/funkintimpak" ]; then
-              tools/funkintimpak/funkintimpak "$png_file" "$tim_file"
-            elif [ -f "png2tim" ]; then
-              ./png2tim "$png_file" "$tim_file"
-            else
-              # Conversión básica con ImageMagick + raw2tim
-              convert "$png_file" -colors 256 "temp_$$.bmp"
-              # Aquí iría raw2tim si estuviera disponible
-              echo "⚠️ Sin herramienta TIM para: $png_file"
-            fi
-          done
-        else
-          echo "📁 Estructura de carpetas:"
-          find . -type d | head -10
-          echo "📊 PNGs encontrados:"
-          find . -name "*.png" | head -5
+        # Compilar img2tim si existe
+        if [ -f "tools/img2tim.c" ]; then
+          echo "📦 Compilando img2tim..."
+          gcc -o tools/img2tim tools/img2tim.c -lm
         fi
         
-    - name: Convertir WAV a XA
+        # Compilar vagconv si existe  
+        if [ -f "tools/vagconv.c" ]; then
+          echo "🔊 Compilando vagconv..."
+          gcc -o tools/vagconv tools/vagconv.c -lm
+        fi
+        
+        # Verificar qué herramientas tenemos
+        echo "✅ Herramientas compiladas:"
+        ls -la tools/ 2>/dev/null || echo "No se pudo acceder a tools/"
+        
+    - name: Compilar juego PRINCIPAL
       run: |
-        echo "🎵 CONVIRTIENDO AUDIO WAV → XA..."
+        echo "🎮 COMPILANDO EJECUTABLE PRINCIPAL..."
         
-        if find iso -name "*.wav" | grep -q .; then
-          find iso -name "*.wav" | while read wav_file; do
-            xa_file="${wav_file%.wav}.xa"
-            echo "Convirtiendo: $wav_file → $xa_file"
-            
-            # Conversión con FFmpeg
-            ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file" -y
-          done
-        fi
+        # Verificar Makefiles disponibles
+        echo "📋 Makefiles disponibles:"
+        ls -la Makefile* 2>/dev/null || echo "No hay Makefiles"
         
-    - name: Compilar juego con PSXSDK
-      run: |
-        echo "🎮 COMPILANDO JUEGO COMPLETO..."
-        
-        # Instalar PSXSDK si no está
-        if [ ! -d "/usr/local/psxsdk" ]; then
-          git clone https://github.com/psxdev/psxsdk
-          cd psxsdk && make && sudo make install && cd ..
-        fi
-        
-        # Compilar
-        export PSXSDK=/usr/local/psxsdk
-        export PATH=/usr/local/psxsdk/bin:$PATH
-        
+        # Compilar con el Makefile correcto
         if [ -f "Makefile.psx" ]; then
+          echo "🚀 Usando Makefile.psx..."
+          make -f Makefile.psx clean
           make -f Makefile.psx
         elif [ -f "Makefile" ]; then
+          echo "🚀 Usando Makefile principal..."
+          make clean
           make
         else
           echo "❌ No se encontró Makefile"
-          echo "📁 Buscando scripts de build..."
-          find . -name "build.sh" -o -name "compile*" -o -name "Makefile*"
+          exit 1
         fi
         
-    - name: Verificar resultados
-      run: |
-        echo "📊 RESULTADOS DE COMPILACIÓN:"
-        echo "🎨 TIMs generados:"
-        find . -name "*.tim" | head -10
-        echo "🎵 XAs generados:"
-        find . -name "*.xa" | head -10
-        echo "🎮 Archivos de juego:"
-        find . -name "*.bin" -o -name "*.cue" -o -name "*.elf" | head -10
-        echo "📁 Estructura final:"
-        ls -la
+        # Verificar que se creó el BIN
+        if [ -f "PSXFNKN.BIN" ]; then
+          echo "✅ PSXFNKN.BIN creado exitosamente!"
+          ls -la PSXFNKN.BIN
+          # Mover a carpeta ISO
+          cp PSXFNKN.BIN iso/PSXFNKN.BIN
+        else
+          echo "⚠️ PSXFNKN.BIN no se creó, buscando alternativas..."
+          find . -name "*.BIN" -o -name "*.bin" | head -10
+        fi
         
-    - name: Subir build completo
+    - name: Procesar assets EXISTENTES (solo si hay assets fuente)
+      if: ${{ github.event.inputs.skip_assets != 'true' }}
+      run: |
+        echo "🎨 PROCESANDO ASSETS..."
+        
+        # Verificar si hay assets para procesar
+        if [ -d "assets" ]; then
+          echo "📁 Carpeta assets encontrada, procesando..."
+          
+          # Crear estructura de destino si no existe
+          mkdir -p iso/ASSETS
+          
+          # Procesar imágenes si existen
+          if find assets -name "*.png" | grep -q .; then
+            echo "🖼️ Procesando PNGs..."
+            find assets -name "*.png" | while read png; do
+              name=$(basename "$png" .png)
+              echo "Converting $name"
+              if [ -f "tools/img2tim" ]; then
+                tools/img2tim "$png" "iso/ASSETS/${name}.TIM"
+              else
+                # Conversión básica como fallback
+                convert "$png" "iso/ASSETS/${name}.TIM" 2>/dev/null || true
+              fi
+            done
+          fi
+          
+          # Procesar audio si existe
+          if find assets -name "*.wav" | grep -q .; then
+            echo "🔊 Procesando audio..."
+            find assets -name "*.wav" | while read wav; do
+              name=$(basename "$wav" .wav)
+              echo "Converting $name"
+              if [ -f "tools/vagconv" ]; then
+                tools/vagconv "$wav" "iso/ASSETS/${name}.VAG"
+              else
+                # Conversión básica con ffmpeg
+                ffmpeg -i "$wav" -acodec pcm_s16le "iso/ASSETS/${name}.VAG" 2>/dev/null || true
+              fi
+            done
+          fi
+        else
+          echo "ℹ️ No hay carpeta 'assets', usando assets preexistentes"
+        fi
+        
+        echo "📊 Assets finales en ISO:"
+        find iso -type f | head -20
+        
+    - name: Crear ISO Booteable
+      run: |
+        echo "📀 CREANDO ISO PSX..."
+        
+        # Verificar contenido de la carpeta ISO
+        echo "📁 Contenido de ISO/:"
+        ls -la iso/ || echo "No se pudo listar iso/"
+        
+        # Crear ISO
+        mkisofs -o PSXFunkin.iso \
+          -sysid "PLAYSTATION" \
+          -volid "PSXFNKN" \
+          -V "PSXFNKN" \
+          -J -r -l \
+          iso/
+        
+        # Verificar ISO creado
+        if [ -f "PSXFunkin.iso" ]; then
+          echo "✅ ISO creado exitosamente!"
+          ls -la PSXFunkin.iso
+          echo "Tamaño: $(du -h PSXFunkin.iso | cut -f1)"
+        else
+          echo "❌ Error: No se pudo crear el ISO"
+          exit 1
+        fi
+        
+    - name: Verificar build FINAL
+      run: |
+        echo "🎯 VERIFICACIÓN FINAL"
+        echo "===================="
+        
+        # Archivos críticos
+        echo "📋 Archivos generados:"
+        ls -la *.iso *.BIN *.bin 2>/dev/null || echo "No hay archivos de build"
+        
+        # Tamaño total
+        echo "📊 Tamaño del build:"
+        du -sh . 2>/dev/null || echo "No se pudo calcular tamaño"
+        
+        # Estructura ISO
+        echo "🌳 Estructura del ISO:"
+        isoinfo -l -i PSXFunkin.iso 2>/dev/null || echo "No se puede leer ISO"
+        
+    - name: Subir artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: psx-game-completo
+        name: psx-funkin-build
         path: |
+          PSXFunkin.iso
+          *.BIN
           *.bin
-          *.cue
-          *.elf
-          iso/
+        retention-days: 7
