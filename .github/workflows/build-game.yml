@@ -1,4 +1,4 @@
-name: Build PSX Game - VERSIÓN FINAL
+name: Build PSX Game - CON ASSETS
 
 on:
   workflow_dispatch:
@@ -10,63 +10,114 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Instalar dependencias básicas
+    - name: Instalar dependencias completas
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip
+        sudo apt-get install -y build-essential make gcc git wget ffmpeg imagemagick python3 python3-pip unzip gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
         
-    - name: Método 1 - PSXSDK Moderno
-      id: metodo1
-      continue-on-error: true
+    - name: Compilar herramientas de assets
       run: |
-        echo "🔧 MÉTODO 1: PSXSDK ACTUALIZADO..."
-        git clone https://github.com/psxdev/psxsdk
-        cd psxsdk
-        make && sudo make install
-        cd ..
+        echo "🔨 COMPILANDO HERRAMIENTAS DE CONVERSIÓN..."
         
-        # Intentar compilación
+        # Buscar y compilar herramientas de assets
+        if [ -f "Makefile.tools" ]; then
+          make -f Makefile.tools
+        fi
+        
+        if [ -f "tools/Makefile" ]; then
+          make -C tools
+        fi
+        
+        # Verificar herramientas compiladas
+        echo "🔍 Buscando herramientas..."
+        find tools -type f -executable
+        find . -name "funkintimpak" -o -name "png2tim" -o -name "wav2xa"
+        
+    - name: Convertir PNG a TIM
+      run: |
+        echo "🎨 CONVIRTIENDO SPRITES PNG → TIM..."
+        
+        # Buscar PNG en estructura del juego
+        if find iso -name "*.png" | grep -q .; then
+          find iso -name "*.png" | while read png_file; do
+            tim_file="${png_file%.png}.tim"
+            echo "Convirtiendo: $png_file"
+            
+            # Intentar diferentes herramientas
+            if [ -f "tools/funkintimpak/funkintimpak" ]; then
+              tools/funkintimpak/funkintimpak "$png_file" "$tim_file"
+            elif [ -f "png2tim" ]; then
+              ./png2tim "$png_file" "$tim_file"
+            else
+              # Conversión básica con ImageMagick + raw2tim
+              convert "$png_file" -colors 256 "temp_$$.bmp"
+              # Aquí iría raw2tim si estuviera disponible
+              echo "⚠️ Sin herramienta TIM para: $png_file"
+            fi
+          done
+        else
+          echo "📁 Estructura de carpetas:"
+          find . -type d | head -10
+          echo "📊 PNGs encontrados:"
+          find . -name "*.png" | head -5
+        fi
+        
+    - name: Convertir WAV a XA
+      run: |
+        echo "🎵 CONVIRTIENDO AUDIO WAV → XA..."
+        
+        if find iso -name "*.wav" | grep -q .; then
+          find iso -name "*.wav" | while read wav_file; do
+            xa_file="${wav_file%.wav}.xa"
+            echo "Convirtiendo: $wav_file → $xa_file"
+            
+            # Conversión con FFmpeg
+            ffmpeg -i "$wav_file" -acodec adpcm_ima_wav "$xa_file" -y
+          done
+        fi
+        
+    - name: Compilar juego con PSXSDK
+      run: |
+        echo "🎮 COMPILANDO JUEGO COMPLETO..."
+        
+        # Instalar PSXSDK si no está
+        if [ ! -d "/usr/local/psxsdk" ]; then
+          git clone https://github.com/psxdev/psxsdk
+          cd psxsdk && make && sudo make install && cd ..
+        fi
+        
+        # Compilar
+        export PSXSDK=/usr/local/psxsdk
+        export PATH=/usr/local/psxsdk/bin:$PATH
+        
         if [ -f "Makefile.psx" ]; then
           make -f Makefile.psx
         elif [ -f "Makefile" ]; then
           make
+        else
+          echo "❌ No se encontró Makefile"
+          echo "📁 Buscando scripts de build..."
+          find . -name "build.sh" -o -name "compile*" -o -name "Makefile*"
         fi
         
-    - name: Método 2 - Toolchain Directo
-      if: steps.metodo1.outcome == 'failure'
-      id: metodo2  
-      continue-on-error: true
+    - name: Verificar resultados
       run: |
-        echo "⚡ MÉTODO 2: COMPILADOR DIRECTO..."
-        sudo apt-get install -y gcc-mipsel-linux-gnu binutils-mipsel-linux-gnu
+        echo "📊 RESULTADOS DE COMPILACIÓN:"
+        echo "🎨 TIMs generados:"
+        find . -name "*.tim" | head -10
+        echo "🎵 XAs generados:"
+        find . -name "*.xa" | head -10
+        echo "🎮 Archivos de juego:"
+        find . -name "*.bin" -o -name "*.cue" -o -name "*.elf" | head -10
+        echo "📁 Estructura final:"
+        ls -la
         
-        # Compilar archivos fuente directamente
-        if find . -name "*.c" | head -1 | grep -q .; then
-          find . -name "*.c" -exec mipsel-linux-gnu-gcc -O2 {} -o {}.o \;
-        fi
-        
-    - name: Crear archivos de juego
-      run: |
-        echo "🎯 GENERANDO ARCHIVOS FINALES..."
-        
-        # Buscar .bin existente o crear uno
-        if ! find . -name "*.bin" | grep -q .; then
-          echo "📦 Creando archivo .bin base..."
-          dd if=/dev/zero of=game.bin bs=1M count=1 status=none
-        fi
-        
-        # Crear .cue si no existe
-        if [ ! -f "game.cue" ]; then
-          echo 'FILE "game.bin" BINARY' > game.cue
-        fi
-        
-        echo "✅ ARCHIVOS CREADOS:"
-        ls -la *.bin *.cue
-        
-    - name: Subir juego PSX
+    - name: Subir build completo
       uses: actions/upload-artifact@v4
       with:
-        name: psx-game-build
+        name: psx-game-completo
         path: |
           *.bin
           *.cue
+          *.elf
+          iso/
