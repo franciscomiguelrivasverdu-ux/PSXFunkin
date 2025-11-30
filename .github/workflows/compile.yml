@@ -1,0 +1,50 @@
+name: Compile PSXFunkin
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout PSXFunkin
+      uses: actions/checkout@v4
+      
+    - name: Checkout PsyQ SDK
+      uses: actions/checkout@v4
+      with:
+        repository: franciscomiguelrivasverdu-ux/PSYQ
+        path: psyq-sdk
+        
+    - name: Set up PsyQ environment
+      run: |
+        mkdir -p mips/psyq
+        cp -r psyq-sdk/* mips/psyq/
+        chmod +x mips/psyq/BIN/*
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y make dos2unix
+        # Convertir archivos DOS a Unix
+        find mips/psyq/BIN -type f -exec dos2unix {} \;
+        
+    - name: Compile PSXFunkin
+      run: |
+        export PSYQ_PATH=$(pwd)/mips/psyq
+        export PATH=$PATH:$PSYQ_PATH/BIN
+        make
+        
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: psxfunkin-binaries
+        path: |
+          *.BIN
+          *.CUE
+          *.EXE
+        retention-days: 30
