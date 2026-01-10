@@ -3,9 +3,9 @@ name: Transform Audio to XA Format
 on:
   push:
     paths:
-      - 'audio/**'  # Solo se activa cuando cambian archivos en 'audio/'
+      - 'audio/**'
     branches: [ main, master ]
-  workflow_dispatch:  # Permite ejecución manual desde GitHub
+  workflow_dispatch:
 
 jobs:
   transform-audio:
@@ -18,21 +18,53 @@ jobs:
     - name: Setup FFmpeg
       run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-    - name: Transform MP3 to XA
+    - name: Create output directory
+      run: mkdir -p xa_output
+
+    - name: Transform audio files
       run: |
-        mkdir -p xa_output
-        # Convertir todos los archivos de audio
-        for file in audio/*.mp3 audio/*.wav audio/*.flac 2>/dev/null; do
+        echo "Buscando archivos de audio en 'audio/'..."
+        
+        # Convertir archivos MP3
+        for file in audio/*.mp3; do
           if [ -f "$file" ]; then
-            filename=$(basename "$file" .${file##*.})
-            echo "Converting: $file -> xa_output/${filename}.xa"
+            filename=$(basename "$file" .mp3)
+            echo "Convirtiendo MP3: $file -> xa_output/${filename}.xa"
             ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
           fi
         done
+        
+        # Convertir archivos WAV
+        for file in audio/*.wav; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file" .wav)
+            echo "Convirtiendo WAV: $file -> xa_output/${filename}.xa"
+            ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
+          fi
+        done
+        
+        # Convertir archivos FLAC
+        for file in audio/*.flac; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file" .flac)
+            echo "Convirtiendo FLAC: $file -> xa_output/${filename}.xa"
+            ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
+          fi
+        done
+
+    - name: List generated files
+      run: ls -la xa_output/
 
     - name: Commit and push XA files
       run: |
         git config --local user.email "actions@github.com"
         git config --local user.name "GitHub Actions"
         git add xa_output/
-        git diff --cached --quiet || (git commit -m "Auto-generated XA audio files" && git push)
+        
+        # Verificar si hay cambios para commit
+        if git diff --cached --quiet; then
+          echo "No hay cambios para commit"
+        else
+          git commit -m "Auto-generated XA audio files"
+          git push
+        fi
