@@ -1,40 +1,37 @@
-name: Transform Audio to XA Format
+#!/usr/bin/env python3
+import os
+import subprocess
+from pathlib import Path
 
-on:
-  push:
-    paths:
-      - 'audio/**'  # Ruta donde subes tu música
-    branches: [ main, master ]
-  workflow_dispatch:  # Permite ejecución manual
-
-jobs:
-  transform-audio:
-    runs-on: ubuntu-latest
+def convert_to_xa(input_dir="audio", output_dir="xa_output"):
+    """Convierte archivos de audio a formato XA"""
     
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+    # Crear directorio de salida
+    Path(output_dir).mkdir(exist_ok=True)
+    
+    # Extensiones soportadas
+    audio_extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a']
+    
+    for file_path in Path(input_dir).rglob('*'):
+        if file_path.suffix.lower() in audio_extensions:
+            output_file = Path(output_dir) / f"{file_path.stem}.xa"
+            
+            print(f"Convirtiendo: {file_path} -> {output_file}")
+            
+            # Usar ffmpeg para conversión
+            command = [
+                'ffmpeg', '-i', str(file_path),
+                '-acodec', 'adpcm_ima_ea_xas',
+                '-ar', '37800',  # Frecuencia típica para XA
+                '-ac', '2',      # Estéreo
+                str(output_file)
+            ]
+            
+            try:
+                subprocess.run(command, check=True)
+                print(f"✓ Conversión exitosa")
+            except subprocess.CalledProcessError as e:
+                print(f"✗ Error convirtiendo {file_path}: {e}")
 
-    - name: Setup FFmpeg (para conversión de audio)
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-
-    - name: Transform audio files
-      run: |
-        mkdir -p xa_output
-        # Buscar archivos de audio y convertir a XA
-        find audio -type f \( -name "*.mp3" -o -name "*.wav" -o -name "*.flac" \) | while read file; do
-          filename=$(basename "$file" | cut -d. -f1)
-          ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
-        done
-
-    - name: Commit and push XA files
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add xa_output/
-        git commit -m "Auto-generated XA audio files" || echo "No changes to commit"
-        git push origin HEAD:${{ github.ref_name }}
+if __name__ == "__main__":
+    convert_to_xa()
