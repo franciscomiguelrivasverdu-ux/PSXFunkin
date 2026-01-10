@@ -25,46 +25,44 @@ jobs:
       run: |
         echo "Buscando archivos de audio en 'audio/'..."
         
-        # Convertir archivos MP3
+        # Convertir archivos MP3 a XA
         for file in audio/*.mp3; do
           if [ -f "$file" ]; then
             filename=$(basename "$file" .mp3)
-            echo "Convirtiendo MP3: $file -> xa_output/${filename}.xa"
-            ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
-          fi
-        done
-        
-        # Convertir archivos WAV
-        for file in audio/*.wav; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file" .wav)
-            echo "Convirtiendo WAV: $file -> xa_output/${filename}.xa"
-            ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
-          fi
-        done
-        
-        # Convertir archivos FLAC
-        for file in audio/*.flac; do
-          if [ -f "$file" ]; then
-            filename=$(basename "$file" .flac)
-            echo "Convirtiendo FLAC: $file -> xa_output/${filename}.xa"
-            ffmpeg -i "$file" -acodec adpcm_ima_ea_xas "xa_output/${filename}.xa"
+            echo "Convirtiendo: $file -> xa_output/${filename}.xa"
+            
+            # Opción 1: Usando formato raw con codec ADPCM XA
+            ffmpeg -i "$file" \
+              -f s16le \
+              -acodec pcm_s16le \
+              -ar 37800 \
+              -ac 2 \
+              - |
+              ffmpeg -f s16le -ar 37800 -ac 2 -i - \
+                -c:v copy \
+                -f xa \
+                "xa_output/${filename}.xa"
           fi
         done
 
-    - name: List generated files
-      run: ls -la xa_output/
+    - name: Check if files were created
+      run: |
+        echo "Archivos en xa_output/:"
+        ls -la xa_output/ 2>/dev/null || echo "No se creó la carpeta xa_output"
+        echo ""
+        echo "Número de archivos .xa:"
+        find xa_output/ -name "*.xa" 2>/dev/null | wc -l
 
     - name: Commit and push XA files
       run: |
         git config --local user.email "actions@github.com"
         git config --local user.name "GitHub Actions"
-        git add xa_output/
         
-        # Verificar si hay cambios para commit
-        if git diff --cached --quiet; then
-          echo "No hay cambios para commit"
-        else
+        # Solo hacer commit si hay archivos .xa
+        if find xa_output/ -name "*.xa" | grep -q .; then
+          git add xa_output/
           git commit -m "Auto-generated XA audio files"
           git push
+        else
+          echo "No se generaron archivos .xa, no se hace commit"
         fi
